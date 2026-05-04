@@ -15,7 +15,7 @@ package v1alpha1
 type VersionedAPISchema struct {
 	// Name is the name of the API schema of the AIGatewayRoute or AIServiceBackend.
 	//
-	// +kubebuilder:validation:Enum=OpenAI;Cohere;AWSBedrock;AzureOpenAI;GCPVertexAI;GCPAnthropic;Anthropic;AWSAnthropic
+	// +kubebuilder:validation:Enum=OpenAI;Cohere;AWSBedrock;AzureOpenAI;GCPVertexAI;GCPAnthropic;Anthropic;AWSAnthropic;GoogleAIStudio
 	Name APISchema `json:"name"`
 
 	// Version is the version of the API schema.
@@ -85,6 +85,9 @@ const (
 	// https://aws.amazon.com/bedrock/anthropic/
 	// https://docs.claude.com/en/api/claude-on-amazon-bedrock
 	APISchemaAWSAnthropic APISchema = "AWSAnthropic"
+	// APISchemaGoogleAIStudio is the schema for Google AI Studio (generativelanguage.googleapis.com).
+	// Used for Gemini image generation via x-goog-api-key header auth.
+	APISchemaGoogleAIStudio APISchema = "GoogleAIStudio"
 )
 
 const (

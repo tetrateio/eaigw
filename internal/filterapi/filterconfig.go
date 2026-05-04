@@ -146,6 +146,10 @@ const (
 	APISchemaGCPAnthropic APISchemaName = "GCPAnthropic"
 	// APISchemaAnthropic represents the standard Anthropic API schema.
 	APISchemaAnthropic APISchemaName = "Anthropic"
+	// APISchemaGoogleAIStudio represents the Google AI Studio API schema (generativelanguage.googleapis.com).
+	// Used for Google AI Studio API key auth (x-goog-api-key), e.g. for Gemini image generation.
+	// Distinct from APISchemaGCPVertexAI which uses Vertex AI service account credentials.
+	APISchemaGoogleAIStudio APISchemaName = "GoogleAIStudio"
 	// APISchemaAWSAnthropic represents the AWS Bedrock Anthropic API schema.
 	// Used for Claude models hosted on AWS Bedrock. Supports both OpenAI and Anthropic input formats
 	// depending on the endpoint path, similar to APISchemaGCPAnthropic.
