@@ -7,6 +7,7 @@ package translator
 
 import (
 	"cmp"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"strconv"
@@ -26,8 +27,9 @@ import (
 // OpenAI /v1/images/generations → Google AI Studio generateContent.
 //
 // Google AI Studio image generation uses the generateContent endpoint with
-// responseModalities: ["IMAGE"] so Gemini returns the image as inlineData
-// (base64-encoded bytes) in candidates[0].content.parts[].
+// responseModalities: ["IMAGE", "TEXT"] and returns the image as inlineData
+// (raw bytes) in candidates[0].content.parts[].
+// We base64-encode the bytes to produce the OpenAI b64_json field.
 //
 // API reference: https://ai.google.dev/api/generate-content
 func NewImageGenerationOpenAIToGoogleAIStudioTranslator(schemaVersion string, modelNameOverride internalapi.ModelNameOverride) OpenAIImageGenerationTranslator {
@@ -57,7 +59,7 @@ func (t *openAIToGoogleAIStudioImageGenerationTranslator) RequestBody(
 	modelPath := fmt.Sprintf("/%s/models/%s:%s", t.schemaVersion, t.requestModel, gcpMethodGenerateContent)
 
 	// Build Gemini generateContent request.
-	// responseModalities=["IMAGE"] tells Gemini to return inlineData image bytes.
+	// responseModalities=["IMAGE", "TEXT"] tells Gemini to return inlineData image bytes.
 	gcpReq := &gcpschema.GenerateContentRequest{
 		Contents: []genai.Content{
 			{
@@ -89,8 +91,8 @@ func (t *openAIToGoogleAIStudioImageGenerationTranslator) ResponseHeaders(_ map[
 }
 
 // ResponseBody translates a Gemini generateContent response to an OpenAI ImageGenerationResponse.
-// Gemini returns images as inlineData parts with base64-encoded bytes.
-// Each inlineData part maps to an OpenAI ImageGenerationResponseData with b64_json set.
+// Gemini returns images as inlineData parts with raw bytes.
+// We base64-encode each inlineData part to produce OpenAI b64_json.
 func (t *openAIToGoogleAIStudioImageGenerationTranslator) ResponseBody(
 	_ map[string]string, body io.Reader, _ bool, span tracingapi.ImageGenerationSpan,
 ) (newHeaders []internalapi.Header, newBody []byte, tokenUsage metrics.TokenUsage, responseModel internalapi.ResponseModel, err error) {
@@ -104,7 +106,8 @@ func (t *openAIToGoogleAIStudioImageGenerationTranslator) ResponseBody(
 		responseModel = geminiResp.ModelVersion
 	}
 
-	// Extract base64-encoded image data from inlineData parts across all candidates.
+	// Extract image data from inlineData parts across all candidates.
+	// InlineData.Data is raw bytes from the genai SDK — base64-encode for OpenAI b64_json.
 	var imageData []openai.ImageGenerationResponseData
 	for _, candidate := range geminiResp.Candidates {
 		if candidate.Content == nil {
@@ -113,8 +116,7 @@ func (t *openAIToGoogleAIStudioImageGenerationTranslator) ResponseBody(
 		for _, part := range candidate.Content.Parts {
 			if part.InlineData != nil && len(part.InlineData.Data) > 0 {
 				imageData = append(imageData, openai.ImageGenerationResponseData{
-					// InlineData.Data is already base64-encoded by the genai library.
-					B64JSON: string(part.InlineData.Data),
+					B64JSON: base64.StdEncoding.EncodeToString(part.InlineData.Data),
 				})
 			}
 		}
@@ -132,9 +134,9 @@ func (t *openAIToGoogleAIStudioImageGenerationTranslator) ResponseBody(
 
 	// Populate token usage if available.
 	if geminiResp.UsageMetadata != nil {
-		tokenUsage.SetInputTokens(uint32(geminiResp.UsageMetadata.PromptTokenCount))        //nolint:gosec
-		tokenUsage.SetOutputTokens(uint32(geminiResp.UsageMetadata.CandidatesTokenCount))   //nolint:gosec
-		tokenUsage.SetTotalTokens(uint32(geminiResp.UsageMetadata.TotalTokenCount))         //nolint:gosec
+		tokenUsage.SetInputTokens(uint32(geminiResp.UsageMetadata.PromptTokenCount))      //nolint:gosec
+		tokenUsage.SetOutputTokens(uint32(geminiResp.UsageMetadata.CandidatesTokenCount)) //nolint:gosec
+		tokenUsage.SetTotalTokens(uint32(geminiResp.UsageMetadata.TotalTokenCount))       //nolint:gosec
 	}
 
 	if span != nil {
