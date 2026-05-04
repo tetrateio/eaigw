@@ -181,6 +181,8 @@ type BackendAuth struct {
 	AzureAPIKey *AzureAPIKeyAuth `json:"azureAPIKey,omitempty"`
 	// AnthropicAPIKey is the Anthropic API key.
 	AnthropicAPIKey *AnthropicAPIKeyAuth `json:"anthropicAPIKey,omitempty"`
+	// GoogleAIKey is the Google AI Studio API key.
+	GoogleAIKey *GoogleAIKeyAuth `json:"googleAIKey,omitempty"`
 	// AzureAuth specifies the location of Azure access token file.
 	AzureAuth *AzureAuth `json:"azure,omitempty"`
 	// GCPAuth specifies the location of GCP credential file.
@@ -210,6 +212,12 @@ type AzureAPIKeyAuth struct {
 // AnthropicAPIKeyAuth defines the Anthropic API key.
 type AnthropicAPIKeyAuth struct {
 	// Key is the Anthropic API key as a literal string.
+	Key string `json:"key"`
+}
+
+// GoogleAIKeyAuth defines the Google AI Studio API key.
+type GoogleAIKeyAuth struct {
+	// Key is the Google AI Studio API key as a literal string.
 	Key string `json:"key"`
 }
 
