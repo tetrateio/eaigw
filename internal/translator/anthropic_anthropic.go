@@ -26,15 +26,15 @@ import (
 )
 
 // NewAnthropicToAnthropicTranslator creates a passthrough translator for Anthropic.
-func NewAnthropicToAnthropicTranslator(version string, modelNameOverride internalapi.ModelNameOverride) AnthropicMessagesTranslator {
-	// TODO: use "version" in APISchema struct to set the specific prefix if needed like OpenAI does. However, two questions:
-	// 	* Is there any "Anthropic compatible" API that uses a different prefix like OpenAI does?
-	// 	* Even if there is, we should refactor the APISchema struct to have "prefix" field instead of abusing "version" field.
-	_ = version
-	return &anthropicToAnthropicTranslator{modelNameOverride: modelNameOverride}
+func NewAnthropicToAnthropicTranslator(path string, modelNameOverride internalapi.ModelNameOverride) AnthropicMessagesTranslator {
+	return &anthropicToAnthropicTranslator{
+		path:              path,
+		modelNameOverride: modelNameOverride,
+	}
 }
 
 type anthropicToAnthropicTranslator struct {
+	path                   string
 	modelNameOverride      internalapi.ModelNameOverride
 	requestModel           internalapi.RequestModel
 	stream                 bool
@@ -68,7 +68,7 @@ func (a *anthropicToAnthropicTranslator) RequestBody(original []byte, body *anth
 		newBody = original
 	}
 
-	newHeaders = []internalapi.Header{{pathHeaderName, "/v1/messages"}}
+	newHeaders = []internalapi.Header{{pathHeaderName, a.path}}
 	if len(newBody) > 0 {
 		newHeaders = append(newHeaders, internalapi.Header{contentLengthHeaderName, strconv.Itoa(len(newBody))})
 	}
@@ -86,6 +86,11 @@ func (a *anthropicToAnthropicTranslator) ResponseHeaders(_ map[string]string) (
 func (a *anthropicToAnthropicTranslator) ResponseBody(_ map[string]string, body io.Reader, _ bool, span tracingapi.MessageSpan) (
 	newHeaders []internalapi.Header, newBody []byte, tokenUsage metrics.TokenUsage, responseModel string, err error,
 ) {
+	// For count_tokens endpoint, passthrough the response without parsing
+	if strings.Contains(a.path, "/count_tokens") {
+		return nil, nil, tokenUsage, a.requestModel, nil
+	}
+
 	if a.stream {
 		var buf []byte
 		buf, err = io.ReadAll(body)

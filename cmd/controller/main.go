@@ -18,6 +18,7 @@ import (
 	"time"
 
 	egextension "github.com/envoyproxy/gateway/proto/extension"
+	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -43,6 +44,8 @@ type flags struct {
 	extProcImagePullPolicy         corev1.PullPolicy
 	enableLeaderElection           bool
 	logLevel                       zapcore.Level
+	logBackend                     string
+	logFormat                      string
 	extensionServerPort            string
 	tlsCertDir                     string
 	tlsCertName                    string
@@ -133,6 +136,16 @@ func parseAndValidateFlags(args []string) (*flags, error) {
 		"logLevel",
 		"info",
 		"The log level for the controller manager. One of 'debug', 'info', 'warn', or 'error'.",
+	)
+	logBackendPtr := fs.String(
+		"logBackend",
+		"",
+		"The log backend for the controller manager. One of 'gcp' or '' (empty for default zap logger).",
+	)
+	logFormatPtr := fs.String(
+		"logFormat",
+		"",
+		"The log format for the controller manager. One of 'json' or '' (empty for default text format).",
 	)
 	extensionServerPortPtr := fs.String(
 		"port",
@@ -324,6 +337,8 @@ func parseAndValidateFlags(args []string) (*flags, error) {
 		extProcImagePullPolicy:                 extProcPullPolicy,
 		enableLeaderElection:                   *enableLeaderElectionPtr,
 		logLevel:                               zapLogLevel,
+		logBackend:                             *logBackendPtr,
+		logFormat:                              *logFormatPtr,
 		extensionServerPort:                    *extensionServerPortPtr,
 		tlsCertDir:                             *tlsCertDir,
 		tlsCertName:                            *tlsCertName,
@@ -358,7 +373,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: parsedFlags.logLevel})))
+	// Configure logger based on backend and format flags
+	if parsedFlags.logBackend == "gcp" {
+		// Use slog handler for GCP-compatible structured logging
+		var handlerOpts slog.HandlerOptions
+		switch parsedFlags.logLevel {
+		case zapcore.DebugLevel:
+			handlerOpts.Level = slog.LevelDebug
+		case zapcore.InfoLevel:
+			handlerOpts.Level = slog.LevelInfo
+		case zapcore.WarnLevel:
+			handlerOpts.Level = slog.LevelWarn
+		case zapcore.ErrorLevel:
+			handlerOpts.Level = slog.LevelError
+		}
+		var handler slog.Handler
+		if parsedFlags.logFormat == "json" {
+			handler = slog.NewJSONHandler(os.Stderr, &handlerOpts)
+		} else {
+			handler = slog.NewTextHandler(os.Stderr, &handlerOpts)
+		}
+		logger := slog.New(handler)
+		ctrl.SetLogger(logr.FromSlogHandler(handler))
+		slog.SetDefault(logger)
+	} else {
+		ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{Development: true, Level: parsedFlags.logLevel})))
+	}
 	k8sConfig := ctrl.GetConfigOrDie()
 
 	lis, err := net.Listen("tcp", parsedFlags.extensionServerPort)

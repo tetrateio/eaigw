@@ -65,15 +65,20 @@ type mcpTracer struct {
 }
 
 func newMCPTracer(tracer trace.Tracer, propagator propagation.TextMapPropagator, attributeMappings map[string]string) tracingapi.MCPTracer {
-	return mcpTracer{
+	return &mcpTracer{
 		tracer:            tracer,
 		propagator:        propagator,
 		attributeMappings: attributeMappings,
 	}
 }
 
+// ExtractFromRequest implements [tracingapi.MCPTracer.ExtractFromRequest].
+func (m *mcpTracer) ExtractFromRequest(r *http.Request) context.Context {
+	return m.propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+}
+
 // StartSpanAndInjectMeta implements [tracingapi.MCPTracer.StartSpanAndInjectMeta].
-func (m mcpTracer) StartSpanAndInjectMeta(ctx context.Context, req *jsonrpc.Request, param mcp.Params, headers http.Header) tracingapi.MCPSpan {
+func (m *mcpTracer) StartSpanAndInjectMeta(ctx context.Context, req *jsonrpc.Request, param mcp.Params, headers http.Header) tracingapi.MCPSpan {
 	attrs := []attribute.KeyValue{
 		attribute.String("mcp.protocol.version", "2025-06-18"),
 		attribute.String("mcp.transport", "http"),

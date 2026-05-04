@@ -82,7 +82,7 @@ func (s *session) Close() error {
 			)
 			continue
 		}
-		addMCPHeaders(req, nil, nil, s.route, backendName)
+		addMCPHeaders(req, nil, nil, s.route, backendName, sessionID.String(), s.reqCtx.parentRequestID)
 		s.reqCtx.applyOriginalPathHeaders(req)
 		req.Header.Set(sessionIDHeader, sessionID.String())
 		resp, err := s.reqCtx.client.Do(req)
@@ -361,7 +361,7 @@ func (s *session) sendRequestPerBackend(ctx context.Context, eventChan chan<- *b
 		return fmt.Errorf("failed to create GET request: %w", err)
 	}
 	sessionID := cse.sessionID.String()
-	addMCPHeaders(req, request, params, routeName, backend.Name)
+	addMCPHeaders(req, request, params, routeName, backend.Name, sessionID, s.reqCtx.parentRequestID)
 	s.reqCtx.applyLogHeaderMappings(req, request)
 	s.reqCtx.applyOriginalPathHeaders(req)
 	req.Header.Set(protocolVersionHeader, protocolVersion20250618)

@@ -224,6 +224,32 @@ func (s *Server) maybeModifyCluster(ctx context.Context, cluster *clusterv3.Clus
 				if backendRef.Weight != nil && *backendRef.Weight == 0 {
 					continue
 				}
+				// Check if we have enough endpoints in the LoadAssignment to avoid index out of range panic.
+				// This mismatch can occur when Envoy Gateway filters out invalid/unavailable backends:
+				// - Service doesn't exist (BackendNotFound)
+				// - Service has no ready endpoints
+				// - Cross-namespace reference without ReferenceGrant
+				// - Backend validation failures (invalid TLS, unreachable endpoints)
+				// The route will work but some backends won't have metadata populated, which may cause
+				// missing backend names in response headers and potential ext_proc issues.
+				if lbEndpointIndex >= len(cluster.LoadAssignment.Endpoints) {
+					s.log.Error(nil,
+						"LoadAssignment endpoints count mismatch - backend will not have metadata populated",
+						"cluster_name", cluster.Name,
+						"expected_endpoint_index", lbEndpointIndex,
+						"actual_endpoints_length", len(cluster.LoadAssignment.Endpoints),
+						"total_backend_refs", len(httpRouteRule.BackendRefs),
+						"current_backend_index", i,
+						"backend_name", backendRef.Name,
+						"backend_namespace", aigwRoute.Namespace,
+						"backend_weight", backendRef.Weight,
+						"route_name", aigwRoute.Name,
+						"route_namespace", aigwRoute.Namespace,
+						"route_rule_index", httpRouteRuleIndex,
+						"guidance", "Check AIGatewayRoute status for backend validation errors")
+					// Continue to skip this backend but still process remaining backends in the rule.
+					continue
+				}
 				endpoints := cluster.LoadAssignment.Endpoints[lbEndpointIndex]
 				lbEndpointIndex++
 				name := backendRef.Name
@@ -597,6 +623,17 @@ func (s *Server) enableRouterLevelAIGatewayExtProcOnRoute(routeConfig *routev3.R
 				}
 				// Enable the extproc filter for this route.
 				route.TypedPerFilterConfig[aiGatewayExtProcName] = fcAny
+
+				// Add backend name response header.
+				if route.ResponseHeadersToAdd == nil {
+					route.ResponseHeadersToAdd = make([]*corev3.HeaderValueOption, 0)
+				}
+				route.ResponseHeadersToAdd = append(route.ResponseHeadersToAdd, &corev3.HeaderValueOption{
+					Header: &corev3.HeaderValue{
+						Key:   "x-ai-eg-upstream-backend-name",
+						Value: "%UPSTREAM_METADATA(aigateway.envoy.io:per_route_rule_backend_name)%",
+					},
+				})
 
 				routeName := routeNameFromEnvoyGatewayMetadata(route)
 				if routeName == "" {

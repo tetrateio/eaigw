@@ -120,6 +120,9 @@ func checkToolCallError(req *jsonrpc.Request, msg *jsonrpc.Response, backendName
 }
 
 func (m *mcpRequestContext) serveGET(w http.ResponseWriter, r *http.Request) {
+	// Set parent_request_id in response headers for client visibility and ALS capture
+	w.Header().Set(internalapi.MCPMetadataHeaderParentRequestID, m.parentRequestID)
+
 	sessionID := r.Header.Get(sessionIDHeader)
 	lastEventID := r.Header.Get(lastEventIDHeader)
 	if sessionID == "" {
@@ -154,6 +157,9 @@ func (m *mcpRequestContext) serveGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *mcpRequestContext) serverDELETE(w http.ResponseWriter, r *http.Request) {
+	// Set parent_request_id in response headers for client visibility and ALS capture
+	w.Header().Set(internalapi.MCPMetadataHeaderParentRequestID, m.parentRequestID)
+
 	sessionID := r.Header.Get(sessionIDHeader)
 	if sessionID == "" {
 		m.l.Error("missing session ID in DELETE request")
@@ -187,6 +193,9 @@ func doNotForwardResponseToBackends(msg *jsonrpc.Response) bool {
 }
 
 func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
+	// Set parent_request_id in response headers for client visibility and ALS capture
+	w.Header().Set(internalapi.MCPMetadataHeaderParentRequestID, m.parentRequestID)
+
 	var (
 		ctx              = r.Context()
 		startAt          = time.Now()
@@ -313,7 +322,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 		switch msg.Method {
 		case "notifications/roots/list_changed":
 			params = &mcp.RootsListChangedParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -322,7 +331,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			err = m.handleNotificationsRootsListChanged(ctx, s, w, msg, params, span)
 		case "completion/complete":
 			params = &mcp.CompleteParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -331,7 +340,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			result, err = m.handleCompletionComplete(ctx, s, w, msg, params.(*mcp.CompleteParams), span)
 		case "notifications/progress":
 			params = &mcp.ProgressNotificationParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			m.metrics.RecordProgress(ctx, params)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
@@ -342,7 +351,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 		case "initialize":
 			// The very first request from the client to establish a session.
 			params = &mcp.InitializeParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				m.l.Error("Failed to unmarshal initialize params", slog.String("error", err.Error()))
@@ -372,7 +381,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			return
 		case "logging/setLevel":
 			params = &mcp.SetLoggingLevelParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				m.l.Error("Failed to unmarshal set logging level params", slog.String("error", err.Error()))
@@ -385,7 +394,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			err = m.handlePing(ctx, w, msg)
 		case "prompts/list":
 			params = &mcp.ListPromptsParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -394,7 +403,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			err = m.handlePromptListRequest(ctx, s, w, msg, params.(*mcp.ListPromptsParams), span)
 		case "prompts/get":
 			params = &mcp.GetPromptParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -403,7 +412,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			result, err = m.handlePromptGetRequest(ctx, s, w, msg, params.(*mcp.GetPromptParams))
 		case "tools/call":
 			params = &mcp.CallToolParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				m.l.Error("Failed to unmarshal params", slog.String("method", msg.Method), slog.String("error", err.Error()))
@@ -413,7 +422,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			result, err = m.handleToolCallRequest(ctx, s, w, msg, params.(*mcp.CallToolParams), span, r)
 		case "tools/list":
 			params = &mcp.ListToolsParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -422,7 +431,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			err = m.handleToolsListRequest(ctx, s, w, msg, params.(*mcp.ListToolsParams), span)
 		case "resources/list":
 			params = &mcp.ListResourcesParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -431,7 +440,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			err = m.handleResourceListRequest(ctx, s, w, msg, params.(*mcp.ListResourcesParams), span)
 		case "resources/read":
 			params = &mcp.ReadResourceParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -440,7 +449,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			result, err = m.handleResourceReadRequest(ctx, s, w, msg, params.(*mcp.ReadResourceParams))
 		case "resources/templates/list":
 			params = &mcp.ListResourceTemplatesParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -449,7 +458,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			err = m.handleResourcesTemplatesListRequest(ctx, s, w, msg, params.(*mcp.ListResourceTemplatesParams), span)
 		case "resources/subscribe":
 			params = &mcp.SubscribeParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -458,7 +467,7 @@ func (m *mcpRequestContext) servePOST(w http.ResponseWriter, r *http.Request) {
 			result, err = m.handleResourcesSubscribeRequest(ctx, s, w, msg, params.(*mcp.SubscribeParams), span)
 		case "resources/unsubscribe":
 			params = &mcp.UnsubscribeParams{}
-			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header)
+			span, err = parseParamsAndMaybeStartSpan(ctx, m, msg, params, r.Header, r)
 			if err != nil {
 				errType = metrics.MCPErrorInvalidParam
 				onErrorResponse(w, http.StatusBadRequest, "invalid params")
@@ -800,6 +809,11 @@ func (m *mcpRequestContext) proxyResponseBody(ctx context.Context, s *session, w
 					// Check if this is a JSON-RPC error response
 					if msg.Error != nil {
 						responseError = msg.Error
+						// Set error metadata headers for access logging.
+						if rpcErr, ok := msg.Error.(*jsonrpc.Error); ok {
+							w.Header().Set(internalapi.MCPMetadataHeaderErrorCode, fmt.Sprintf("%d", rpcErr.Code))
+							w.Header().Set(internalapi.MCPMetadataHeaderErrorMessage, rpcErr.Message)
+						}
 					} else if toolErr := checkToolCallError(req, msg, backend.Name); toolErr != nil {
 						// Check if this is a tools/call response with isError=true
 						responseError = toolErr
@@ -830,6 +844,9 @@ func (m *mcpRequestContext) proxyResponseBody(ctx context.Context, s *session, w
 	if m.l.Enabled(ctx, slog.LevelDebug) {
 		m.l.Debug("Starting to stream MCP response body", slog.String("content_type", resp.Header.Get("Content-Type")), slog.String("mcp_session_id", resp.Header.Get(sessionIDHeader)))
 	}
+	// Pre-declare trailers so error metadata headers can be set after WriteHeader
+	// in the SSE streaming path and still be captured by Envoy ALS.
+	w.Header().Set("Trailer", internalapi.MCPMetadataHeaderErrorCode+", "+internalapi.MCPMetadataHeaderErrorMessage)
 	w.WriteHeader(resp.StatusCode)
 	// For single-backend operations, metrics are recorded in the defer of servePOST,
 	// so we don't need to track startAt in events here.
@@ -872,6 +889,13 @@ func (m *mcpRequestContext) proxyResponseBody(ctx context.Context, s *session, w
 						if msg.Error != nil {
 							// Collect error to return to caller
 							responseErrors = append(responseErrors, msg.Error)
+							// Set error metadata headers for access logging (only first error)
+							if len(responseErrors) == 1 {
+								if rpcErr, ok := msg.Error.(*jsonrpc.Error); ok {
+									w.Header().Set(internalapi.MCPMetadataHeaderErrorCode, fmt.Sprintf("%d", rpcErr.Code))
+									w.Header().Set(internalapi.MCPMetadataHeaderErrorMessage, rpcErr.Message)
+								}
+							}
 						} else if toolErr := checkToolCallError(req, msg, backend.Name); toolErr != nil {
 							// Check if this is a tools/call response with isError=true
 							responseErrors = append(responseErrors, toolErr)
@@ -1443,10 +1467,18 @@ func (m *mcpRequestContext) invokeAndProxyResponse(ctx context.Context, s *sessi
 }
 
 // addMCPHeaders adds the MCP metadata headers to the HTTP request.
-func addMCPHeaders(httpReq *http.Request, msg jsonrpc.Message, params mcp.Params, routeName filterapi.MCPRouteName, backendName filterapi.MCPBackendName) {
+func addMCPHeaders(httpReq *http.Request, msg jsonrpc.Message, params mcp.Params, routeName filterapi.MCPRouteName, backendName filterapi.MCPBackendName, sessionID string, parentRequestID string) {
 	// MCP backend header is used for upstream MCP routing.
 	httpReq.Header.Set(internalapi.MCPBackendHeader, backendName)
 	httpReq.Header.Set(internalapi.MCPRouteHeader, routeName)
+	// Set parent request ID for correlating fan-out requests.
+	if parentRequestID != "" {
+		httpReq.Header.Set(internalapi.MCPMetadataHeaderParentRequestID, parentRequestID)
+	}
+	// Set session ID if available (may be empty for initialize request).
+	if sessionID != "" {
+		httpReq.Header.Set(internalapi.MCPMetadataHeaderSessionID, sessionID)
+	}
 	if mcpReq, ok := msg.(*jsonrpc.Request); ok && mcpReq != nil {
 		// MCP request headers are used to populate information in the envoy filter metadata.
 		httpReq.Header.Set(internalapi.MCPMetadataHeaderRequestID, fmt.Sprintf("%v", mcpReq.ID.Raw()))
@@ -1455,6 +1487,18 @@ func addMCPHeaders(httpReq *http.Request, msg jsonrpc.Message, params mcp.Params
 		if params != nil {
 			if p, ok := params.(*mcp.CallToolParams); ok {
 				httpReq.Header.Set(internalapi.MCPMetadataHeaderToolName, p.Name)
+			}
+		}
+
+		// Extract and set resource URI for resource requests.
+		if mcpReq.Method == "resources/read" || mcpReq.Method == "resources/subscribe" || mcpReq.Method == "resources/unsubscribe" {
+			if len(mcpReq.Params) > 0 {
+				var resourceParams struct {
+					URI string `json:"uri"`
+				}
+				if err := json.Unmarshal(mcpReq.Params, &resourceParams); err == nil && resourceParams.URI != "" {
+					httpReq.Header.Set(internalapi.MCPMetadataHeaderResourceURI, resourceParams.URI)
+				}
 			}
 		}
 	}
@@ -1577,7 +1621,7 @@ func sendToAllBackendsAndAggregateResponsesImpl[responseType any, paramsType mcp
 }
 
 // parseParamsAndMaybeStartSpan parses the params from the JSON-RPC request and starts a tracing span if params is non-nil.
-func parseParamsAndMaybeStartSpan[paramType mcp.Params](ctx context.Context, m *mcpRequestContext, req *jsonrpc.Request, p paramType, headers http.Header) (tracingapi.MCPSpan, error) {
+func parseParamsAndMaybeStartSpan[paramType mcp.Params](ctx context.Context, m *mcpRequestContext, req *jsonrpc.Request, p paramType, headers http.Header, r *http.Request) (tracingapi.MCPSpan, error) {
 	if req.Params == nil {
 		return nil, nil
 	}
@@ -1587,6 +1631,8 @@ func parseParamsAndMaybeStartSpan[paramType mcp.Params](ctx context.Context, m *
 		return nil, err
 	}
 
+	// Extract parent span context from HTTP headers
+	ctx = m.tracer.ExtractFromRequest(r)
 	span := m.tracer.StartSpanAndInjectMeta(ctx, req, p, headers)
 	return span, nil
 }

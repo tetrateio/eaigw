@@ -37,6 +37,7 @@ type mcpRequestContext struct {
 	requestHeaders            http.Header
 	originalPath              string
 	perBackendMetricsRecorded bool
+	parentRequestID           string // For correlating fan-out backend requests
 }
 
 // NewMCPProxy creates a new MCPProxy instance.
@@ -58,11 +59,16 @@ func NewMCPProxy(l *slog.Logger, mcpMetrics metrics.MCPMetrics, tracer tracingap
 		// For example, if we mistakenly set /mcp here, only the route with prefix /mcp will be matched, and other routes
 		// with different prefixes will not be matched, which is not desired.
 		"/", func(w http.ResponseWriter, r *http.Request) {
+			parentReqID := uuid.New().String() // Generate unique ID for correlating fan-out requests
+			// Set parent_request_id header on incoming request so it's captured by ALS
+			r.Header.Set(internalapi.MCPMetadataHeaderParentRequestID, parentReqID)
+
 			proxy := &mcpRequestContext{
-				metrics:        mcpMetrics.WithRequestAttributes(r),
-				ProxyConfig:    cfg,
-				requestHeaders: r.Header,
-				originalPath:   originalPathForRequest(r),
+				metrics:         mcpMetrics.WithRequestAttributes(r),
+				ProxyConfig:     cfg,
+				requestHeaders:  r.Header,
+				originalPath:    originalPathForRequest(r),
+				parentRequestID: parentReqID,
 			}
 			switch r.Method {
 			case http.MethodGet:
@@ -415,7 +421,11 @@ func (m *mcpRequestContext) invokeJSONRPCRequest(ctx context.Context, routeName 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MCP notifications/initialized request: %w", err)
 	}
-	addMCPHeaders(req, msg, params, routeName, backend.Name)
+	var sessionID string
+	if cse != nil && len(cse.sessionID) > 0 {
+		sessionID = string(cse.sessionID)
+	}
+	addMCPHeaders(req, msg, params, routeName, backend.Name, sessionID, m.parentRequestID)
 	m.applyLogHeaderMappings(req, msg)
 	m.applyOriginalPathHeaders(req)
 	if cse != nil {

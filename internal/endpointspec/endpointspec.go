@@ -88,6 +88,8 @@ type (
 	ResponsesEndpointSpec struct{}
 	// MessagesEndpointSpec implements EndpointSpec for /v1/messages.
 	MessagesEndpointSpec struct{}
+	// CountTokensEndpointSpec implements EndpointSpec for /v1/messages/count_tokens.
+	CountTokensEndpointSpec struct{}
 	// RerankEndpointSpec implements EndpointSpec for /v2/rerank.
 	RerankEndpointSpec struct{}
 	// SpeechEndpointSpec implements EndpointSpec for /v1/audio/speech.
@@ -344,7 +346,7 @@ func (MessagesEndpointSpec) GetTranslator(schema filterapi.VersionedAPISchema, m
 	case filterapi.APISchemaAWSAnthropic:
 		return translator.NewAnthropicToAWSAnthropicTranslator(schema.Version, modelNameOverride), nil
 	case filterapi.APISchemaAnthropic:
-		return translator.NewAnthropicToAnthropicTranslator(schema.Version, modelNameOverride), nil
+		return translator.NewAnthropicToAnthropicTranslator("/v1/messages", modelNameOverride), nil
 	case filterapi.APISchemaOpenAI:
 		return translator.NewAnthropicToChatCompletionOpenAITranslator(schema.OpenAIPrefix(), modelNameOverride), nil
 	default:
@@ -354,6 +356,45 @@ func (MessagesEndpointSpec) GetTranslator(schema filterapi.VersionedAPISchema, m
 
 // RedactSensitiveInfoFromRequest implements [EndpointSpec.RedactSensitiveInfoFromRequest].
 func (MessagesEndpointSpec) RedactSensitiveInfoFromRequest(req *anthropic.MessagesRequest) (redactedReq *anthropic.MessagesRequest, err error) {
+	// Placeholder if redaction is required in future
+	return req, nil
+}
+
+// ParseBody implements [EndpointSpec.ParseBody].
+func (CountTokensEndpointSpec) ParseBody(
+	body []byte,
+	_ bool,
+) (internalapi.OriginalModel, *anthropic.MessagesRequest, bool, []byte, error) {
+	var anthropicReq anthropic.MessagesRequest
+	if err := json.Unmarshal(body, &anthropicReq); err != nil {
+		return "", nil, false, nil, fmt.Errorf("%w: failed to parse JSON for /v1/messages/count_tokens: %w", internalapi.ErrMalformedRequest, err)
+	}
+
+	model := anthropicReq.Model
+	if model == "" {
+		return "", nil, false, nil, fmt.Errorf("%w: model field is required", internalapi.ErrInvalidRequestBody)
+	}
+
+	return model, &anthropicReq, false, nil, nil
+}
+
+// GetTranslator implements [EndpointSpec.GetTranslator].
+func (CountTokensEndpointSpec) GetTranslator(schema filterapi.VersionedAPISchema, modelNameOverride string) (translator.AnthropicMessagesTranslator, error) {
+	// count_tokens processor only supports Anthropic-native translators.
+	switch schema.Name {
+	case filterapi.APISchemaGCPAnthropic:
+		return translator.NewAnthropicToGCPAnthropicTranslator(schema.Version, modelNameOverride), nil
+	case filterapi.APISchemaAWSAnthropic:
+		return translator.NewAnthropicToAWSAnthropicTranslator(schema.Version, modelNameOverride), nil
+	case filterapi.APISchemaAnthropic:
+		return translator.NewAnthropicToAnthropicTranslator("/v1/messages/count_tokens", modelNameOverride), nil
+	default:
+		return nil, fmt.Errorf("/v1/messages/count_tokens endpoint only supports backends that return native Anthropic format (Anthropic, GCPAnthropic, AWSAnthropic). Backend %s uses different model format", schema.Name)
+	}
+}
+
+// RedactSensitiveInfoFromRequest implements [EndpointSpec.RedactSensitiveInfoFromRequest].
+func (CountTokensEndpointSpec) RedactSensitiveInfoFromRequest(req *anthropic.MessagesRequest) (redactedReq *anthropic.MessagesRequest, err error) {
 	// Placeholder if redaction is required in future
 	return req, nil
 }

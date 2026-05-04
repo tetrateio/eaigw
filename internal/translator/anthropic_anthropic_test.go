@@ -57,7 +57,7 @@ func TestAnthropicToAnthropic_RequestBody(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			translator := NewAnthropicToAnthropicTranslator("", tc.modelNameOverride)
+			translator := NewAnthropicToAnthropicTranslator("/v1/messages", tc.modelNameOverride)
 			require.NotNil(t, translator)
 
 			headerMutation, bodyMutation, err := translator.RequestBody(tc.original, &tc.body, tc.forceBodyMutation)
@@ -78,7 +78,7 @@ func TestAnthropicToAnthropic_RequestBody(t *testing.T) {
 }
 
 func TestAnthropicToAnthropic_ResponseHeaders(t *testing.T) {
-	translator := NewAnthropicToAnthropicTranslator("", "")
+	translator := NewAnthropicToAnthropicTranslator("/v1/messages", "")
 	require.NotNil(t, translator)
 
 	headerMutation, err := translator.ResponseHeaders(nil)
@@ -87,7 +87,7 @@ func TestAnthropicToAnthropic_ResponseHeaders(t *testing.T) {
 }
 
 func TestAnthropicToAnthropic_ResponseBody_non_streaming(t *testing.T) {
-	translator := NewAnthropicToAnthropicTranslator("", "")
+	translator := NewAnthropicToAnthropicTranslator("/v1/messages", "")
 	require.NotNil(t, translator)
 	const responseBody = `{"model":"claude-sonnet-4-5-20250929","id":"msg_01J5gW6Sffiem6avXSAooZZw","type":"message","role":"assistant","content":[{"type":"text","text":"Hi! 👋 How can I help you today?"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":9,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":16,"service_tier":"standard"}}`
 
@@ -101,7 +101,7 @@ func TestAnthropicToAnthropic_ResponseBody_non_streaming(t *testing.T) {
 }
 
 func TestAnthropicToAnthropic_ResponseBody_streaming(t *testing.T) {
-	translator := NewAnthropicToAnthropicTranslator("", "")
+	translator := NewAnthropicToAnthropicTranslator("/v1/messages", "")
 	require.NotNil(t, translator)
 	translator.(*anthropicToAnthropicTranslator).stream = true
 
@@ -156,7 +156,7 @@ data: {"type":"message_stop"       }`
 
 func TestAnthropicToAnthropic_ResponseError(t *testing.T) {
 	t.Run("json error", func(t *testing.T) {
-		translator := NewAnthropicToAnthropicTranslator("", "")
+		translator := NewAnthropicToAnthropicTranslator("/v1/messages", "")
 		require.NotNil(t, translator)
 		hdrs, body, err := translator.ResponseError(map[string]string{
 			"content-type": "application/json",
@@ -178,7 +178,7 @@ func TestAnthropicToAnthropic_ResponseError(t *testing.T) {
 		{503, "service_unavailable_error"},
 	} {
 		t.Run("non-json error "+strconv.Itoa(tc.statusCode), func(t *testing.T) {
-			translator := NewAnthropicToAnthropicTranslator("", "")
+			translator := NewAnthropicToAnthropicTranslator("/v1/messages", "")
 			require.NotNil(t, translator)
 			hdrs, body, err := translator.ResponseError(map[string]string{
 				"content-type": "text/plain",

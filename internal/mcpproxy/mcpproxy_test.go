@@ -58,6 +58,10 @@ func (f *fakeTracer) StartSpanAndInjectMeta(context.Context, *jsonrpc.Request, m
 	return f.span
 }
 
+func (f *fakeTracer) ExtractFromRequest(r *http.Request) context.Context {
+	return context.Background()
+}
+
 var noopTracer = tracingapi.NoopMCPTracer{}
 
 func TestNewMCPProxy(t *testing.T) {

@@ -57,14 +57,30 @@ const (
 	MCPMetadataHeaderMethod = MCPMetadataHeaderPrefix + "method"
 	// MCPMetadataHeaderToolName is the special header key used to pass the MCP tool name in the filter metadata.
 	MCPMetadataHeaderToolName = MCPMetadataHeaderPrefix + "tool-name"
+	// MCPMetadataHeaderErrorCode is the special header key used to pass the MCP error code in the filter metadata.
+	MCPMetadataHeaderErrorCode = MCPMetadataHeaderPrefix + "error-code"
+	// MCPMetadataHeaderErrorMessage is the special header key used to pass the MCP error message in the filter metadata.
+	MCPMetadataHeaderErrorMessage = MCPMetadataHeaderPrefix + "error-message"
+	// MCPMetadataHeaderResourceURI is the special header key used to pass the MCP resource URI in the filter metadata.
+	MCPMetadataHeaderResourceURI = MCPMetadataHeaderPrefix + "resource-uri"
+	// MCPMetadataHeaderSessionID is the special header key used to pass the MCP session ID in the filter metadata.
+	MCPMetadataHeaderSessionID = MCPMetadataHeaderPrefix + "session-id"
+	// MCPMetadataHeaderParentRequestID is the special header key used to pass the parent request ID for correlating fan-out requests.
+	MCPMetadataHeaderParentRequestID = MCPMetadataHeaderPrefix + "parent-request-id"
 )
 
 // MCPInternalHeadersToMetadata maps special MCP headers to metadata keys.
 var MCPInternalHeadersToMetadata = map[string]string{
-	MCPBackendHeader:           "mcp_backend",
-	MCPMetadataHeaderMethod:    "mcp_method",
-	MCPMetadataHeaderRequestID: "mcp_request_id",
-	MCPMetadataHeaderToolName:  "mcp_tool_name",
+	MCPBackendHeader:                 "mcp_backend",
+	MCPRouteHeader:                   "mcp_route",
+	MCPMetadataHeaderMethod:          "mcp_method",
+	MCPMetadataHeaderRequestID:       "mcp_request_id",
+	MCPMetadataHeaderParentRequestID: "mcp_parent_request_id",
+	MCPMetadataHeaderSessionID:       "mcp_session_id",
+	MCPMetadataHeaderToolName:        "mcp_tool_name",
+	MCPMetadataHeaderErrorCode:       "mcp_error_code",
+	MCPMetadataHeaderErrorMessage:    "mcp_error_message",
+	MCPMetadataHeaderResourceURI:     "mcp_resource_uri",
 }
 
 const (

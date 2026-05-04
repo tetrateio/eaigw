@@ -26,6 +26,15 @@ type MCPTracer interface {
 	//
 	// Returns nil unless the span is sampled.
 	StartSpanAndInjectMeta(ctx context.Context, req *jsonrpc.Request, param mcp.Params, headers http.Header) MCPSpan
+
+	// ExtractFromRequest extracts parent span context from HTTP headers.
+	//
+	// Parameters:
+	//   - r: HTTP request containing trace propagation headers.
+	//
+	// Returns a context containing the extracted span context, or the original
+	// context if no trace context is found.
+	ExtractFromRequest(r *http.Request) context.Context
 }
 
 // MCPSpan represents an MCP span.
@@ -47,4 +56,9 @@ type NoopMCPTracer struct{}
 // StartSpanAndInjectMeta implements [MCPTracer.StartSpanAndInjectMeta].
 func (NoopMCPTracer) StartSpanAndInjectMeta(context.Context, *jsonrpc.Request, mcp.Params, http.Header) MCPSpan {
 	return nil
+}
+
+// ExtractFromRequest implements [MCPTracer.ExtractFromRequest].
+func (NoopMCPTracer) ExtractFromRequest(r *http.Request) context.Context {
+	return context.Background()
 }

@@ -41,6 +41,8 @@ import (
 type extProcFlags struct {
 	configPath                             string        // path to the configuration file.
 	extProcAddr                            string        // gRPC address for the external processor.
+	logBackend                             string        // log backend (gcp or empty for default).
+	logFormat                              string        // log format (json or text).
 	logLevel                               slog.Level    // log level for the external processor.
 	enableRedaction                        bool          // enable redaction of sensitive information in debug logs.
 	adminPort                              int           // HTTP port for the admin server (metrics and health).
@@ -87,6 +89,16 @@ func parseAndValidateFlags(args []string) (extProcFlags, error) {
 		"extProcAddr",
 		":1063",
 		"gRPC address for the external processor. For example, :1063 or unix:///tmp/ext_proc.sock.",
+	)
+	fs.StringVar(&flags.logBackend,
+		"logBackend",
+		"gcp",
+		"log backend for structured logging. One of 'gcp' or '' (empty for default slog text handler). Default: gcp",
+	)
+	fs.StringVar(&flags.logFormat,
+		"logFormat",
+		"json",
+		"log format. One of 'json' or 'text'. Default: json",
 	)
 	logLevelPtr := fs.String(
 		"logLevel",
@@ -178,6 +190,83 @@ func parseAndValidateFlags(args []string) (extProcFlags, error) {
 	return flags, errors.Join(errs...)
 }
 
+// cloudLoggingAttrsEncoder updates the slog.Record attributes to match the
+// key names and format for Google Cloud Logging.
+//
+// Google Cloud Logging special fields:
+// https://cloud.google.com/logging/docs/structured-logging#special-payload-fields
+func cloudLoggingAttrsEncoder() func([]string, slog.Attr) slog.Attr {
+	const (
+		keySeverity = "severity"
+		keyMessage  = "message"
+		keySource   = "logging.googleapis.com/sourceLocation"
+	)
+
+	// Level name mapping for GCP Cloud Logging severity levels
+	// https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#logseverity
+	levelNames := map[slog.Level]string{
+		slog.LevelDebug: "DEBUG",
+		slog.LevelInfo:  "INFO",
+		slog.LevelWarn:  "WARNING",
+		slog.LevelError: "ERROR",
+	}
+
+	return func(groups []string, a slog.Attr) slog.Attr {
+		// Google Cloud Logging uses "severity" instead of "level"
+		if a.Key == slog.LevelKey {
+			a.Key = keySeverity
+
+			// Convert slog.Level to GCP severity string
+			val := a.Value.Any()
+			typ, ok := val.(slog.Level)
+			if !ok {
+				return a
+			}
+
+			// Map the level to GCP severity name
+			if name, exists := levelNames[typ]; exists {
+				a.Value = slog.StringValue(name)
+			} else {
+				// For custom levels, default to the level's string representation
+				a.Value = slog.StringValue(typ.String())
+			}
+		}
+
+		// Google Cloud Logging uses "message" instead of "msg"
+		if a.Key == slog.MessageKey {
+			a.Key = keyMessage
+		}
+
+		// Google Cloud Logging uses "logging.googleapis.com/sourceLocation" instead of "source"
+		if a.Key == slog.SourceKey {
+			a.Key = keySource
+		}
+
+		return a
+	}
+}
+
+// newLogger creates a new slog.Logger based on the provided flags.
+func newLogger(flags extProcFlags, stderr io.Writer) *slog.Logger {
+	opts := &slog.HandlerOptions{Level: flags.logLevel}
+
+	// Configure logger based on backend and format flags
+	if flags.logBackend == "gcp" {
+		// Use GCP-compatible structured logging
+		opts.ReplaceAttr = cloudLoggingAttrsEncoder()
+
+		// Choose JSON or text format
+		if flags.logFormat == "json" {
+			return slog.New(slog.NewJSONHandler(stderr, opts))
+		}
+		// Default to text for GCP backend if format not specified
+		return slog.New(slog.NewTextHandler(stderr, opts))
+	}
+
+	// Default: use text handler without GCP encoding
+	return slog.New(slog.NewTextHandler(stderr, opts))
+}
+
 // Main is a main function for the external processor exposed
 // for allowing users to build their own external processor.
 //
@@ -199,7 +288,7 @@ func Main(ctx context.Context, args []string, stderr io.Writer) (err error) {
 		return fmt.Errorf("failed to parse and validate extProcFlags: %w", err)
 	}
 
-	l := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: flags.logLevel}))
+	l := newLogger(flags, stderr)
 
 	l.Info("starting external processor",
 		slog.String("version", version.Parse()),
@@ -309,6 +398,13 @@ func Main(ctx context.Context, args []string, stderr io.Writer) (err error) {
 	server.Register(path.Join(flags.rootPrefix, endpointPrefixes.OpenAI, "/v1/models"), extproc.NewModelsProcessor)
 	server.Register(path.Join(flags.rootPrefix, endpointPrefixes.Anthropic, "/v1/messages"), extproc.NewFactory(
 		messagesMetricsFactory, tracing.MessageTracer(), endpointspec.MessagesEndpointSpec{}))
+	server.Register(path.Join(flags.rootPrefix, endpointPrefixes.Anthropic, "/v1/messages/count_tokens"), extproc.NewFactory(
+		messagesMetricsFactory, tracing.MessageTracer(), endpointspec.CountTokensEndpointSpec{}))
+	// Register Anthropic endpoints at root level
+	server.Register(path.Join(flags.rootPrefix, "/v1/messages"), extproc.NewFactory(
+		messagesMetricsFactory, tracing.MessageTracer(), endpointspec.MessagesEndpointSpec{}))
+	server.Register(path.Join(flags.rootPrefix, "/v1/messages/count_tokens"), extproc.NewFactory(
+		messagesMetricsFactory, tracing.MessageTracer(), endpointspec.CountTokensEndpointSpec{}))
 
 	// Create and register gRPC server with ExternalProcessorServer (the service Envoy calls).
 	if err = filterapi.StartConfigWatcher(ctx, flags.configPath, server, l, time.Second*5); err != nil {
