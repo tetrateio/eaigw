@@ -19,7 +19,7 @@ require (
 	github.com/cohere-ai/cohere-go/v2 v2.18.0
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/envoyproxy/gateway v1.7.0
+	github.com/envoyproxy/gateway v1.7.4
 	github.com/envoyproxy/go-control-plane v0.14.0
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
 	github.com/go-logr/logr v1.4.3

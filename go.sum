@@ -158,8 +158,8 @@ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/emicklei/go-restful/v3 v3.13.0 h1:C4Bl2xDndpU6nJ4bc1jXd+uTmYPVUwkD6bFY/oTyCes=
 github.com/emicklei/go-restful/v3 v3.13.0/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
-github.com/envoyproxy/gateway v1.7.0 h1:noVz4fADhljSKpQFaspb25+C3kC8bBBisQZle9W0ei4=
-github.com/envoyproxy/gateway v1.7.0/go.mod h1:U/UXS8G6Q5SldcKubP8PZazD9OsNT0Mf1XzCVig0KkQ=
+github.com/envoyproxy/gateway v1.7.4 h1:O2rq4Cw4KL/m8NvuhozwhYbcBZOdZeqdTZ+etc1ElmQ=
+github.com/envoyproxy/gateway v1.7.4/go.mod h1:rxCXGMRFAyVORqYV6Wr0jxfHbwC9GRjkatH0e9ZV0M0=
 github.com/envoyproxy/go-control-plane v0.14.0 h1:hbG2kr4RuFj222B6+7T83thSPqLjwBIfQawTkC++2HA=
 github.com/envoyproxy/go-control-plane v0.14.0/go.mod h1:NcS5X47pLl/hfqxU70yPwL9ZMkUlwlKxtAohpi2wBEU=
 github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260115164926-066cbd5b3989 h1:KTd1TJym7dgV1L1XlxXeJNct7rJI3xTV+iuArq40wm0=
